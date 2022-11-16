@@ -19,7 +19,7 @@ use rayon::prelude::*;
 #[derive(Clone, PartialEq, Eq, Hash, Default, CanonicalSerialize, CanonicalDeserialize)]
 pub struct SparseMultilinearExtension<F: Field> {
     /// tuples of index and value
-    pub evaluations: BTreeMap<usize, F>,
+    pub evaluations: BTreeMap<u128, F>,
     /// number of variables
     pub num_vars: usize,
     zero: F,
@@ -28,13 +28,13 @@ pub struct SparseMultilinearExtension<F: Field> {
 impl<F: Field> SparseMultilinearExtension<F> {
     pub fn from_evaluations<'a>(
         num_vars: usize,
-        evaluations: impl IntoIterator<Item = &'a (usize, F)>,
+        evaluations: impl IntoIterator<Item = &'a (u128, F)>,
     ) -> Self {
         let bit_mask = 1 << num_vars;
         // check
         let evaluations = evaluations.into_iter();
         let evaluations: Vec<_> = evaluations
-            .map(|(i, v): &(usize, F)| {
+            .map(|(i, v): &(u128, F)| {
                 assert!(*i < bit_mask, "index out of range");
                 (*i, *v)
             })
@@ -61,9 +61,9 @@ impl<F: Field> SparseMultilinearExtension<F> {
 
         let mut map = HashMap::new();
         for _ in 0..num_nonzero_entries {
-            let mut index = usize::rand(rng) & ((1 << num_vars) - 1);
+            let mut index = u128::rand(rng) & ((1 << num_vars) - 1);
             while let Some(_) = map.get(&index) {
-                index = usize::rand(rng) & ((1 << num_vars) - 1);
+                index = u128::rand(rng) & ((1 << num_vars) - 1);
             }
             map.entry(index).or_insert(F::rand(rng));
         }
@@ -85,7 +85,9 @@ impl<F: Field> SparseMultilinearExtension<F> {
     pub fn to_dense_multilinear_extension(&self) -> DenseMultilinearExtension<F> {
         let mut evaluations: Vec<_> = (0..(1 << self.num_vars)).map(|_| F::zero()).collect();
         for (&i, &v) in self.evaluations.iter() {
-            evaluations[i] = v;
+            let index = <usize as core::convert::TryFrom<u128>>::try_from(i)
+                .expect("dense polynomials with more than 64 variables are not supported");
+            evaluations[index] = v;
         }
         DenseMultilinearExtension::from_evaluations_vec(self.num_vars, evaluations)
     }
@@ -115,7 +117,7 @@ impl<F: Field> MultilinearExtension<F> for SparseMultilinearExtension<F> {
 
     fn evaluate(&self, point: &[F]) -> Option<F> {
         if point.len() == self.num_vars {
-            Some(self.fix_variables(&point)[0])
+            Some(self.fix_variables(&point)[0usize])
         } else {
             None
         }
@@ -175,7 +177,7 @@ impl<F: Field> MultilinearExtension<F> for SparseMultilinearExtension<F> {
             let mut result = HashMap::new();
             for src_entry in last.iter() {
                 let old_idx = *src_entry.0;
-                let gz = pre[old_idx & ((1 << dim) - 1)];
+                let gz = pre[old_idx as usize & ((1 << dim) - 1)];
                 let new_idx = old_idx >> dim;
                 let dst_entry = result.entry(new_idx).or_insert(F::zero());
                 *dst_entry += gz * src_entry.1;
@@ -194,8 +196,11 @@ impl<F: Field> MultilinearExtension<F> for SparseMultilinearExtension<F> {
         let mut evaluations: Vec<_> = (0..1 << self.num_vars).map(|_| F::zero()).collect();
         self.evaluations
             .iter()
-            .map(|(&i, &v)| evaluations[i] = v)
-            .last();
+            .for_each(|(&i, &v)| {
+                let index = <usize as core::convert::TryFrom<u128>>::try_from(i)
+                    .expect("to_evaluations not supported for more than 64 variables");
+                evaluations[index] = v;
+            });
         evaluations
     }
 }
@@ -209,6 +214,26 @@ impl<F: Field> Index<usize> for SparseMultilinearExtension<F> {
     ///
     /// For Sparse multilinear polynomial, Lookup_evaluation takes log time to the size of polynomial.
     fn index(&self, index: usize) -> &Self::Output {
+        if let Some(v) = self.evaluations.get(&(index as u128)) {
+            v
+        } else {
+            &self.zero
+        }
+    }
+}
+
+impl<F: Field> Index<u128> for SparseMultilinearExtension<F> {
+    type Output = F;
+
+    /// Returns the evaluation of the polynomial at a point represented by
+    /// index.
+    ///
+    /// Index represents a vector in {0,1}^`num_vars` in little endian form. For
+    /// example, `0b1011` represents `P(1,1,0,1)`
+    ///
+    /// For Sparse multilinear polynomial, Lookup_evaluation takes log time to
+    /// the size of polynomial.
+    fn index(&self, index: u128) -> &Self::Output {
         if let Some(v) = self.evaluations.get(&index) {
             v
         } else {
@@ -378,15 +403,15 @@ impl<F: Field> Debug for SparseMultilinearExtension<F> {
 }
 
 /// Utility: Convert tuples to hashmap.
-fn tuples_to_treemap<F: Field>(tuples: &[(usize, F)]) -> BTreeMap<usize, F> {
+fn tuples_to_treemap<F: Field>(tuples: &[(u128, F)]) -> BTreeMap<u128, F> {
     BTreeMap::from_iter(tuples.iter().map(|(i, v)| (*i, *v)))
 }
 
-fn treemap_to_hashmap<F: Field>(map: &BTreeMap<usize, F>) -> HashMap<usize, F> {
+fn treemap_to_hashmap<F: Field>(map: &BTreeMap<u128, F>) -> HashMap<u128, F> {
     HashMap::from_iter(map.iter().map(|(i, v)| (*i, *v)))
 }
 
-fn hashmap_to_treemap<F: Field>(map: &HashMap<usize, F>) -> BTreeMap<usize, F> {
+fn hashmap_to_treemap<F: Field>(map: &HashMap<u128, F>) -> BTreeMap<u128, F> {
     BTreeMap::from_iter(map.iter().map(|(i, v)| (*i, *v)))
 }
 
@@ -483,8 +508,8 @@ mod tests {
             .into_iter()
             .map(|(i, v)| assert_eq!(poly[i], v))
             .last();
-        assert_eq!(poly[0], Fr::zero());
-        assert_eq!(poly[1], Fr::zero());
+        assert_eq!(poly[0u128], Fr::zero());
+        assert_eq!(poly[1u128], Fr::zero());
     }
 
     #[test]

@@ -6,10 +6,10 @@ pub use sparse::SparseMultilinearExtension;
 
 use ark_std::fmt::Debug;
 use ark_std::hash::Hash;
-use ark_std::ops::{Add, AddAssign, Index, Neg, SubAssign};
+use ark_std::ops::{Add, AddAssign, Index, Neg, SubAssign, Sub, Shl, Shr, BitOr, BitAnd, BitXor};
 use ark_std::vec::Vec;
 
-use ark_ff::{Field, Zero};
+use ark_ff::{Field, Zero, One};
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
@@ -62,9 +62,19 @@ pub trait MultilinearExtension<F: Field>:
 }
 
 /// swap the bits of `x` from position `a..a+n` to `b..b+n` and from `b..b+n` to `a..a+n` in little endian order
-pub(crate) fn swap_bits(x: usize, a: usize, b: usize, n: usize) -> usize {
-    let a_bits = (x >> a) & ((1usize << n) - 1);
-    let b_bits = (x >> b) & ((1usize << n) - 1);
+pub(crate) fn swap_bits<T>(x: T, a: usize, b: usize, n: usize) -> T
+where
+    T: Copy +
+       One +
+       Shl<usize, Output = T> +
+       Shr<usize, Output = T> +
+       BitOr<T, Output = T> +
+       BitAnd<T, Output = T> +
+       BitXor<T, Output = T> +
+       Sub<T, Output = T>,
+{
+    let a_bits = (x >> a) & ((T::one() << n) - T::one());
+    let b_bits = (x >> b) & ((T::one() << n) - T::one());
     let local_xor_mask = a_bits ^ b_bits;
     let global_xor_mask = (local_xor_mask << a) | (local_xor_mask << b);
     x ^ global_xor_mask
