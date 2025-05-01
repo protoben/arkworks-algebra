@@ -6,6 +6,10 @@
 
 ### Features
 
+- (`ark-serialize`) Implementation of `CanonicalSerialize` and `CanonicalDeserialize` for signed integer types
+
+- (`montgomery_backend.rs`) Implementation of optimized multiplication by u64, using specialized Barrett reduction
+
 ### Improvements
 
 ### Bugfixes
