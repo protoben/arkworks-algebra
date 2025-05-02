@@ -30,4 +30,7 @@ pub mod bn384_small_two_adicity;
 #[cfg(feature = "secp256k1")]
 pub mod secp256k1;
 
+#[cfg(feature = "bn254")]
+pub mod bn254;
+
 pub mod fp128;

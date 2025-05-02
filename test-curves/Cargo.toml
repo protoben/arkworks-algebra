@@ -47,6 +47,10 @@ bn384_small_two_adicity_scalar_field = []
 bn384_small_two_adicity_base_field = []
 bn384_small_two_adicity_curve = [ "bn384_small_two_adicity_scalar_field", "bn384_small_two_adicity_base_field" ]
 
+bn254_scalar_field = []
+bn254_base_field = []
+bn254 = [ "bn254_scalar_field", "bn254_base_field" ]
+
 secp256k1 = []
 
 [[bench]]
@@ -79,3 +83,9 @@ name = "field_mul_u64"
 path = "benches/field_mul_u64.rs"
 harness = false
 required-features = ["secp256k1"]
+
+[[bench]]
+name = "bn254"
+path = "benches/bn254.rs"
+harness = false
+required-features = ["bn254"]
