@@ -408,7 +408,8 @@ pub trait MontConfig<const N: usize>: 'static + Sync + Send + Sized {
         } else if BigInt::from(r) >= <MontBackend<Self, N>>::MODULUS {
             None
         } else {
-            Some(Fp::new_unchecked(Self::R2).mul_u64(r))
+            // Multiply R (one in Montgomery form) with the u64
+            Some(Fp::new_unchecked(Self::R).mul_u64(r))
         }
     }
 
@@ -939,9 +940,10 @@ impl<T: MontConfig<N>, const N: usize> Fp<MontBackend<T, N>, N> {
     /// Multiply by a u128.
     /// Uses optimized mul_u64 if the input fits within u64,
     /// otherwise falls back to standard multiplication.
+    /// DO NOT USE right now, highly inefficient (2x slower than regular mul)
     #[inline(always)]
     pub fn mul_u128(self, other: u128) -> Self {
-        if other <= u64::MAX as u128 {
+        if other >> 64 == 0 {
             self.mul_u64(other as u64)
         } else {
             // Fallback: Convert u128 to Fp and multiply.
@@ -953,6 +955,7 @@ impl<T: MontConfig<N>, const N: usize> Fp<MontBackend<T, N>, N> {
     /// Multiply by an i128.
     /// Uses optimized mul_i64 if the input fits within i64,
     /// otherwise falls back to standard multiplication.
+    /// DO NOT USE right now, highly inefficient (2x slower than regular mul)
     #[inline(always)]
     pub fn mul_i128(self, other: i128) -> Self {
         if other >= i64::MIN as i128 && other <= i64::MAX as i128 {

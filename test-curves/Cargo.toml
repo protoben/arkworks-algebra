@@ -79,10 +79,10 @@ path = "benches/mnt6_753.rs"
 harness = false
 
 [[bench]]
-name = "field_mul_u64"
-path = "benches/field_mul_u64.rs"
+name = "small_mul"
+path = "benches/small_mul.rs"
 harness = false
-required-features = ["secp256k1"]
+required-features = ["bn254"]
 
 [[bench]]
 name = "bn254"
