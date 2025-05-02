@@ -5,12 +5,6 @@ use crate::{
 use ark_ff_macros::unroll_for_loops;
 use ark_std::marker::PhantomData;
 
-#[cfg(all(feature = "std", debug_assertions))]
-use ark_std::println;
-
-#[cfg(all(feature = "std", debug_assertions))]
-use ark_std::string::{String, ToString};
-
 pub const PRECOMP_TABLE_SIZE: usize = 1 << 14;
 
 /// A trait that specifies the constants and arithmetic procedures
@@ -407,8 +401,9 @@ pub trait MontConfig<const N: usize>: 'static + Sync + Send + Sized {
     fn from_u64(r: u64) -> Option<Fp<MontBackend<Self, N>, N>> {
         if r < PRECOMP_TABLE_SIZE as u64 {
             Some(Self::SMALL_ELEMENT_MONTGOMERY_PRECOMP[r as usize])
-        } else if BigInt::from(r) >= <MontBackend<Self, N>>::MODULUS {
-            None
+        // This should not happen for big modulus
+        // } else if BigInt::from(r) >= <MontBackend<Self, N>>::MODULUS {
+        //     None
         } else {
             // Multiply R (one in Montgomery form) with the u64
             Some(Fp::new_unchecked(Self::R).mul_u64(r))
@@ -756,12 +751,7 @@ impl<T: MontConfig<N>, const N: usize> FpConfig<N> for MontBackend<T, N> {
     }
 
     fn from_u64(r: u64) -> Option<Fp<Self, N>> {
-        if BigInt::from(r) >= T::MODULUS { // Access MODULUS via T
-            None
-        } else {
-            // Use the standard From<u64> implementation for Fp
-            Some(Fp::<Self, N>::from(r))
-        }
+        T::from_u64(r)
     }
 }
 
@@ -1106,8 +1096,8 @@ mod test {
             let result = a_prime.mul_u64(*b_val);
 
             assert_eq!(
-                result, 
-                expected_c_prime, 
+                result,
+                expected_c_prime,
                 "Test case {} failed:\n a(std) = {}\n b = {:#x}\n Expected c'(mont) = {}\n Got c'(mont) = {}",
                 i + 1,
                 a_str,
