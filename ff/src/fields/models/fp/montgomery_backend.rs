@@ -924,6 +924,18 @@ impl<T: MontConfig<N>, const N: usize> Fp<MontBackend<T, N>, N> {
         Self::new_unchecked(BigInt::<N>::new(result_bigint))
     }
 
+    /// Multiply by an i64.
+    #[inline(always)]
+    pub fn mul_i64(self, other: i64) -> Self {
+        if other >= 0 {
+            // Multiply by the positive value directly
+            self.mul_u64(other as u64)
+        } else {
+            // Multiply by the absolute value and then negate the result
+            -(self.mul_u64((-other) as u64))
+        }
+    }
+
     const fn const_is_valid(&self) -> bool {
         crate::const_for!((i in 0..N) {
             if (self.0).0[N - i - 1] < T::MODULUS.0[N - i - 1] {
