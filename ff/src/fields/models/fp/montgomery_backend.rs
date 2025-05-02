@@ -100,6 +100,42 @@ pub trait MontConfig<const N: usize>: 'static + Sync + Send + Sized {
         }
     };
 
+    /// Number of spare bits (i.e. significant bits equal to 0) in the modulus `p`
+    #[doc(hidden)]
+    const MODULUS_NUM_SPARE_BITS: u32 = Self::MODULUS.num_spare_bits();
+
+    /// 2 * MODULUS. Last limb is represented as a u64, but is always 0 or 1.
+    #[doc(hidden)]
+    const MODULUS_TIMES_2: ([u64; N], u64) = {
+        let (modulus_times_2, carry) = Self::MODULUS.const_mul2_with_carry();
+        (modulus_times_2.0, carry as u64)
+    };
+
+    /// Barrett reduction constant: $R' = 2^{\text{MODULUS_BITS}}$.
+    #[doc(hidden)]
+    const BARRETT_RPRIME: (BigInt<N>, bool) = {
+        let num_spare_bits = Self::MODULUS.num_spare_bits();
+        assert!(num_spare_bits <= 64);
+        if num_spare_bits == 0 {
+            (BigInt::<N>::zero(), true)
+        } else {
+            (BigInt::<N>::pow_2(64 - num_spare_bits), false)
+        }
+    };
+
+    /// Barrett reduction constant: mu = floor( r * R' / (2 * MODULUS) )
+    /// = floor( 2^(64 * (N + 1) - num_spare_bits(MODULUS) - 1) / MODULUS )
+    #[doc(hidden)]
+    const BARRETT_MU: u64 = {
+        assert!(Self::MODULUS.num_spare_bits() < 64);
+        let r_times_r_prime_over_2 =
+            crate::const_helpers::RBuffer::<N>([0u64; N],
+                1 << (63 - Self::MODULUS.num_spare_bits()));
+        let result: BigInt<N> = const_modulo!(r_times_r_prime_over_2, &Self::MODULUS);
+        // Result should be a u64
+        result.0[0]
+    };
+
     /// Sets `a = a + b`.
     #[inline(always)]
     fn add_assign(a: &mut Fp<MontBackend<Self, N>, N>, b: &Fp<MontBackend<Self, N>, N>) {
@@ -830,9 +866,56 @@ impl<T: MontConfig<N>, const N: usize> Fp<MontBackend<T, N>, N> {
         }
     }
 
-    #[unroll_for_loops(12)]
-    #[inline(always)]
-    pub fn mul_u64(mut self, other: u64) -> Self { todo!() }
+    pub fn mul_u64(self, other: u64) -> Self {
+        // Stage 1: Bignum Multiplication
+        // Compute c = self.0 * other. Result c has N+1 limbs.
+        let (c_lo, c_hi): ([u64; N], u64) = bigint_mul_by_u64(&self.0.0, other);
+
+        // Compute tilde_c = floor(c / R') = floor(c / 2^MODULUS_BITS)
+        // If there is a spare bit, then we will need to construct tilde_c as the _concatenation_
+        // of c_hi with the high spare bits of c_lo[N-1]
+        // Otherwise, tilde_c = c_hi
+        let tilde_c: u64 = if T::MODULUS_HAS_SPARE_BIT {
+            (c_hi << T::MODULUS_NUM_SPARE_BITS) + (c_lo[N - 1] >> (64 - T::MODULUS_NUM_SPARE_BITS))
+        } else {
+            c_hi
+        };
+
+        // Stage 2: Barrett Reduction
+        // Compute m = floor( (tilde_c * BARRETT_MU) / r ) = (tilde_c * BARRETT_MU as u128) >> 64
+        let m: u64 = ((tilde_c as u128 * T::BARRETT_MU as u128) >> 64) as u64;
+
+        // Compute m * 2p
+        let (m2p_lo, m2p_hi, _m2p_carry) =
+            bigint_plus_one_mul_by_u64(&T::MODULUS_TIMES_2.0, &T::MODULUS_TIMES_2.1, m);
+
+        // Should not have a carry out of the high limb
+        debug_assert!(_m2p_carry == false);
+
+        // Compute r = c - m * 2p
+        // Have either r = (c mod 2p) or r = (c mod 2p) + 2p
+        let (mut r_lo, mut r_hi, _r_borrow) =
+            sub_bigint_plus_one((c_lo, c_hi), (m2p_lo, m2p_hi));
+
+        // Conditional subtraction: r := r - 2p if r >= 2p
+        let cmp_2p = compare_bigint_plus_one((r_lo, r_hi), T::MODULUS_TIMES_2);
+        if cmp_2p != core::cmp::Ordering::Less { // if r >= 2p
+            (r_lo, r_hi, _) = sub_bigint_plus_one((r_lo, r_hi), T::MODULUS_TIMES_2);
+        }
+        // Now r = (r_lo, r_hi) = c mod 2p
+
+        // Compute c' = r - p if r >= p else r_lo
+        let cmp_p = compare_bigint_plus_one((r_lo, r_hi), (T::MODULUS.0, 0));
+        
+        // if r >= p
+        let result_bigint = if cmp_p != core::cmp::Ordering::Less {
+            sub_bigint_plus_one((r_lo, r_hi), (T::MODULUS.0, 0)).0
+        } else {
+            r_lo
+        };
+
+        Self::new_unchecked(BigInt::<N>::new(result_bigint))
+    }
 
     const fn const_is_valid(&self) -> bool {
         crate::const_for!((i in 0..N) {
@@ -871,6 +954,37 @@ mod test {
     use ark_std::{str::FromStr, vec::*};
     use ark_test_curves::secp256k1::Fr;
     use num_bigint::{BigInt, BigUint, Sign};
+    use crate::ark_std::rand::RngCore;
+
+    // #[test]
+    // fn test_mul_u64() {
+    //     use crate::{BigInt, UniformRand};
+    //     use ark_test_curves::secp256k1::Fr;
+
+    //     let mut rng = ark_std::test_rng();
+    //     const N: usize = 4; // For Fr (secp256k1 scalar field)
+
+    //     // Generate random field element
+    //     let random_bigint = BigInt::<N>::rand(&mut rng);
+    //     let value1_fp = Fr::new(random_bigint); // Converts to Montgomery form
+
+    //     // Generate random u64
+    //     let value2_u64 = u64::rand(&mut rng);
+
+    //     // Compute using the optimized mul_u64
+    //     let result_mul_u64 = value1_fp.mul_u64(value2_u64);
+
+    //     // Compute the expected result using standard field multiplication
+    //     // Fr::from(u64) correctly converts the u64 into Montgomery form
+    //     let expected_fp = value1_fp * Fr::from(value2_u64);
+
+    //     assert_eq!(result_mul_u64, expected_fp, "mul_u64 did not match standard field multiplication");
+
+    //     // Test with zero
+    //     let zero_fp = Fr::zero();
+    //     assert_eq!(zero_fp.mul_u64(value2_u64), zero_fp, "0.mul_u64(x) != 0");
+    //     assert_eq!(value1_fp.mul_u64(0), zero_fp, "x.mul_u64(0) != 0");
+    // }
 
     #[test]
     fn test_mont_macro_correctness() {
@@ -905,5 +1019,72 @@ mod test {
 
         let sign_is_positive = sign != Sign::Minus;
         (sign_is_positive, limbs)
+    }
+}
+
+/// Multiply a N-limb big integer with a u64, producing a N+1 limb result, 
+/// represented as a tuple of an array of N limbs and a u64 high limb
+#[inline(always)]
+fn bigint_mul_by_u64<const N: usize>(val: &[u64; N], other: u64) -> ([u64; N], u64) { 
+    let (mut lo, mut hi) = ([0u64; N], 0u64);
+
+    for i in 0..N - 1 {
+        lo[i] = mac_with_carry!(lo[i], val[i], other, &mut lo[i + 1]);
+    }
+    lo[N - 1] = mac_with_carry!(lo[N - 1], val[N - 1], other, &mut hi);
+
+    (lo, hi)
+}
+
+/// Multiply a N+1 limb big integer with a u64, producing a N+1 limb result,
+/// represented as a tuple of an array of N limbs and a u64 high limb
+/// Also returns a boolean indicating if there was a carry out of the high limb (for debugging)
+#[inline(always)]
+fn bigint_plus_one_mul_by_u64<const N: usize>(val_lo: &[u64; N], val_hi: &u64, other: u64) -> ([u64; N], u64, bool) {
+    let (mut lo, mut hi, mut carry) = ([0u64; N], *val_hi, 0u64);
+
+    for i in 0..N - 1 {
+        lo[i] = mac_with_carry!(lo[i], val_lo[i], other, &mut lo[i + 1]);
+    }
+    lo[N - 1] = mac_with_carry!(lo[N - 1], val_lo[N - 1], other, &mut hi);
+    hi = mac_with_carry!(hi, *val_hi, other, &mut carry);
+
+    (lo, hi, carry != 0)
+}
+
+/// Subtract two N+1 limb big integers, represented as a tuple of an array of N limbs and a u64 high limb
+#[inline(always)]
+fn sub_bigint_plus_one<const N: usize>(
+    a: ([u64; N], u64),
+    b: ([u64; N], u64),
+) -> ([u64; N], u64, bool) {
+    let (mut a_lo, mut a_hi) = a;
+    let (b_lo, b_hi) = b;
+    let mut borrow = 0u64; // sbb uses u64 for borrow
+
+    // Subtract low N limbs
+    for i in 0..N {
+        // Updates a_lo[i] in place and returns the new borrow
+        borrow = fa::sbb(&mut a_lo[i], b_lo[i], borrow);
+    }
+
+    // Subtract high limb
+    // Need to calculate a_hi - b_hi - borrow and get the final borrow out
+    let tmp = (1u128 << 64) + (a_hi as u128) - (b_hi as u128) - (borrow as u128);
+    let final_borrow_occurred = (tmp >> 64) == 0;
+    a_hi = tmp as u64; // Update the high limb result
+
+    (a_lo, a_hi, final_borrow_occurred)
+}
+
+/// Compare two N+1 limb big integers, represented as a tuple of an array of N limbs and a u64 high limb
+#[inline(always)]
+fn compare_bigint_plus_one<const N: usize>(a: ([u64; N], u64), b: ([u64; N], u64)) -> core::cmp::Ordering {
+    if a.1 > b.1 {
+        return core::cmp::Ordering::Greater;
+    } else if a.1 < b.1 {
+        return core::cmp::Ordering::Less;
+    } else {
+        a.0.cmp(&b.0)
     }
 }

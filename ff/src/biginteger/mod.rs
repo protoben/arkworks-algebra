@@ -108,7 +108,7 @@ macro_rules! const_modulo {
         // Stupid slow base-2 long division taken from
         // https://en.wikipedia.org/wiki/Division_algorithm
         assert!(!$divisor.const_is_zero());
-        let mut remainder = Self::new([0u64; N]);
+        let mut remainder = BigInt::<N>::new([0u64; N]);
         let mut i = ($a.num_bits() - 1) as isize;
         let mut carry;
         while i >= 0 {
@@ -173,7 +173,7 @@ impl<const N: usize> BigInt<N> {
         result
     }
 
-    const fn const_geq(&self, other: &Self) -> bool {
+    pub(crate) const fn const_geq(&self, other: &Self) -> bool {
         const_for!((i in 0..N) {
             let a = self.0[N - i - 1];
             let b = other.0[N - i - 1];
@@ -228,9 +228,44 @@ impl<const N: usize> BigInt<N> {
     }
 
     /// Find the number of bits in the binary decomposition of `self`.
+    /// Assume that `self` fills out all `N-1` low limbs
     #[doc(hidden)]
     pub const fn const_num_bits(self) -> u32 {
         ((N - 1) * 64) as u32 + (64 - self.0[N - 1].leading_zeros())
+    }
+
+    /// Compute `2^((N-1) * 64) * 2^exp`
+    /// Assume that `exp < 64`
+    #[doc(hidden)]
+    pub const fn pow_2(exp: u32) -> Self {
+        assert!(exp < 64);
+        let mut res = Self::zero();
+        res.0[N - 1] = 1;
+        let mut i = 0;
+        while i < exp {
+            res.0[N - 1] = res.0[N - 1] << 1;
+            i += 1;
+        }
+        res
+    }
+
+    /// Compute the number of spare (i.e. leading zero) bits in the big integer.
+    /// Assumes that `self` fills out all `N-1` low limbs.
+    /// This means the number of spare bits is determined by the
+    /// leading zeros in the most significant limb.
+    #[doc(hidden)]
+    pub const fn num_spare_bits(self) -> u32 {
+        // Count the leading zeros in the most significant limb
+        let msb = self.0[N - 1];
+        let mut count = 0;
+        let mut mask = 1u64 << 63; // Start with the highest bit
+        
+        while count < 64 && (msb & mask) == 0 {
+            count += 1;
+            mask >>= 1;
+        }
+        
+        count
     }
 
     #[inline]
@@ -255,7 +290,7 @@ impl<const N: usize> BigInt<N> {
         (self, carry != 0)
     }
 
-    const fn const_mul2_with_carry(mut self) -> (Self, bool) {
+    pub(crate) const fn const_mul2_with_carry(mut self) -> (Self, bool) {
         let mut last = 0;
         crate::const_for!((i in 0..N) {
             let a = self.0[i];
