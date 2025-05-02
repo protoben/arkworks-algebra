@@ -5,6 +5,12 @@ use crate::{
 use ark_ff_macros::unroll_for_loops;
 use ark_std::marker::PhantomData;
 
+#[cfg(all(feature = "std", debug_assertions))]
+use ark_std::println;
+
+#[cfg(all(feature = "std", debug_assertions))]
+use ark_std::string::{String, ToString};
+
 pub const PRECOMP_TABLE_SIZE: usize = 1 << 14;
 
 /// A trait that specifies the constants and arithmetic procedures
@@ -458,8 +464,8 @@ pub trait MontConfig<const N: usize>: 'static + Sync + Send + Sized {
         //   limb of each `a_i` together. As these have the same offset within the overall
         //   operand scanning flow, their results can be summed directly.
         // - We can interleave the multiplication and reduction steps, resulting in a
-        //   single bitshift by the limb size after each iteration. This means we only
-        //   need to store a single extra limb overall, instead of keeping around all the
+        //   single bitshift by the limb size after each iteration. This means we
+        //   only need to store a single extra limb overall, instead of keeping around all the
         //   intermediate results and eventually having twice as many limbs.
 
         let modulus_size = Self::MODULUS.const_num_bits() as usize;
@@ -866,6 +872,7 @@ impl<T: MontConfig<N>, const N: usize> Fp<MontBackend<T, N>, N> {
         }
     }
 
+    #[inline(always)]
     pub fn mul_u64(self, other: u64) -> Self {
         // Stage 1: Bignum Multiplication
         // Compute c = self.0 * other. Result c has N+1 limbs.
@@ -954,37 +961,63 @@ mod test {
     use ark_std::{str::FromStr, vec::*};
     use ark_test_curves::secp256k1::Fr;
     use num_bigint::{BigInt, BigUint, Sign};
-    use crate::ark_std::rand::RngCore;
 
-    // #[test]
-    // fn test_mul_u64() {
-    //     use crate::{BigInt, UniformRand};
-    //     use ark_test_curves::secp256k1::Fr;
+    #[test]
+    fn test_mul_u64() {
+        // Hardcoded test cases
+        let test_cases = [
+            (
+                // Case 1: a, b, c_expected
+                "5643163066332897998285190543902796094438237865213483745295470180324691296548",
+                0x7ca4ebb3cdc4337c,
+                "38327774843006778574282443845423185889821286904593972973342506303495927514099",
+            ),
+            (
+                // Case 2: a, b, c_expected
+                "9576115280717986323792898695369675311918746597797968631517140097713896617029",
+                0x91c5fef7b07bafea,
+                "96697958646652577219944786365856988981226975082903134420936821151612435151888",
+            ),
+            (
+                // Case 3: a, b, c_expected
+                "7661634904059247069564870460362673938206761030595567619339001446116489789481",
+                0x25841ec4215642a8,
+                "89293439558430162673677967055881891199082813356531362972449360818369777995721",
+            ),
+            (
+                // Case 4: a, b, c_expected
+                "10883286947838267661462139025291841296679667038210980569409473787260452219050",
+                0xfb0a2d275f008413,
+                "19656191731886811905926577359236877197726293107264230636252563426234326962042",
+            ),
+            (
+                // Case 5: a, b, c_expected
+                "2569976750766767168587755422619162294969046017017098753771495041739016061221",
+                0x13338e370795ef21,
+                "45349715065256290359696693915549785722497254782662339497728486466675099346870",
+            ),
+        ];
 
-    //     let mut rng = ark_std::test_rng();
-    //     const N: usize = 4; // For Fr (secp256k1 scalar field)
+        for (i, (a_str, b_val, expected_c_str)) in test_cases.iter().enumerate() {
+            // Use Fr::from_str which handles standard decimal/hex and converts to Montgomery form
+            let a_prime = Fr::from_str(a_str).expect("Failed to parse a string");
+            let expected_c_prime = Fr::from_str(expected_c_str).expect("Failed to parse expected_c string");
 
-    //     // Generate random field element
-    //     let random_bigint = BigInt::<N>::rand(&mut rng);
-    //     let value1_fp = Fr::new(random_bigint); // Converts to Montgomery form
+            let result = a_prime.mul_u64(*b_val);
 
-    //     // Generate random u64
-    //     let value2_u64 = u64::rand(&mut rng);
-
-    //     // Compute using the optimized mul_u64
-    //     let result_mul_u64 = value1_fp.mul_u64(value2_u64);
-
-    //     // Compute the expected result using standard field multiplication
-    //     // Fr::from(u64) correctly converts the u64 into Montgomery form
-    //     let expected_fp = value1_fp * Fr::from(value2_u64);
-
-    //     assert_eq!(result_mul_u64, expected_fp, "mul_u64 did not match standard field multiplication");
-
-    //     // Test with zero
-    //     let zero_fp = Fr::zero();
-    //     assert_eq!(zero_fp.mul_u64(value2_u64), zero_fp, "0.mul_u64(x) != 0");
-    //     assert_eq!(value1_fp.mul_u64(0), zero_fp, "x.mul_u64(0) != 0");
-    // }
+            assert_eq!(
+                result, // This is c' = a*b*R mod p
+                expected_c_prime, // This is also c' = a*b*R mod p (calculated from standard c via from_str)
+                "Test case {} failed:\n a(std) = {}\n b = {:#x}\n Expected c(std) = {}\n Got c'(mont) = {}\n Expected c'(mont) = {}",
+                i + 1,
+                a_str,
+                b_val,
+                expected_c_str,
+                result, // Fr implements Display (converts *out* of Montgomery form to standard decimal)
+                expected_c_prime // Fr implements Display (converts *out* of Montgomery form to standard decimal)
+            );
+        }
+    }
 
     #[test]
     fn test_mont_macro_correctness() {
@@ -1024,35 +1057,57 @@ mod test {
 
 /// Multiply a N-limb big integer with a u64, producing a N+1 limb result, 
 /// represented as a tuple of an array of N limbs and a u64 high limb
+#[unroll_for_loops(8)]
 #[inline(always)]
-fn bigint_mul_by_u64<const N: usize>(val: &[u64; N], other: u64) -> ([u64; N], u64) { 
-    let (mut lo, mut hi) = ([0u64; N], 0u64);
+fn bigint_mul_by_u64<const N: usize>(val: &[u64; N], other: u64) -> ([u64; N], u64) {
+    let mut result_lo = [0u64; N];
+    let mut carry: u64 = 0; // Start with carry = 0
 
-    for i in 0..N - 1 {
-        lo[i] = mac_with_carry!(lo[i], val[i], other, &mut lo[i + 1]);
+    // Iterate through each limb of the input BigInt
+    for i in 0..N {
+        // Calculate the full 128-bit product of the current limb and the u64 multiplier
+        let prod128: u128 = (val[i] as u128) * (other as u128);
+
+        // Add the carry from the previous limb's computation
+        let sum128: u128 = prod128 + (carry as u128);
+
+        // The lower 64 bits of the sum become the current result limb
+        result_lo[i] = sum128 as u64; // Truncates to lower 64 bits
+
+        // The upper 64 bits of the sum become the carry for the next limb
+        carry = (sum128 >> 64) as u64;
     }
-    lo[N - 1] = mac_with_carry!(lo[N - 1], val[N - 1], other, &mut hi);
 
-    (lo, hi)
+    // After the loop, the final carry is the high limb (N+1-th limb) of the result
+    let result_hi = carry;
+
+    (result_lo, result_hi)
 }
 
 /// Multiply a N+1 limb big integer with a u64, producing a N+1 limb result,
 /// represented as a tuple of an array of N limbs and a u64 high limb
 /// Also returns a boolean indicating if there was a carry out of the high limb (for debugging)
+#[unroll_for_loops(8)]
 #[inline(always)]
 fn bigint_plus_one_mul_by_u64<const N: usize>(val_lo: &[u64; N], val_hi: &u64, other: u64) -> ([u64; N], u64, bool) {
-    let (mut lo, mut hi, mut carry) = ([0u64; N], *val_hi, 0u64);
-
-    for i in 0..N - 1 {
-        lo[i] = mac_with_carry!(lo[i], val_lo[i], other, &mut lo[i + 1]);
+    // Multiply a (N+1)-limb big integer (low limbs + high limb) by a u64, returning (N low limbs, high limb, overflow)
+    let mut result_lo = [0u64; N];
+    let mut carry: u64 = 0;
+    // Stage 1: multiply the low N limbs
+    for i in 0..N {
+        let prod: u128 = (val_lo[i] as u128) * (other as u128) + (carry as u128);
+        result_lo[i] = prod as u64;
+        carry = (prod >> 64) as u64;
     }
-    lo[N - 1] = mac_with_carry!(lo[N - 1], val_lo[N - 1], other, &mut hi);
-    hi = mac_with_carry!(hi, *val_hi, other, &mut carry);
-
-    (lo, hi, carry != 0)
+    // Stage 2: multiply the high limb plus carry
+    let prod_hi: u128 = (*val_hi as u128) * (other as u128) + (carry as u128);
+    let result_hi = prod_hi as u64;
+    let overflow = (prod_hi >> 64) != 0;
+    (result_lo, result_hi, overflow)
 }
 
 /// Subtract two N+1 limb big integers, represented as a tuple of an array of N limbs and a u64 high limb
+#[unroll_for_loops(8)]
 #[inline(always)]
 fn sub_bigint_plus_one<const N: usize>(
     a: ([u64; N], u64),
@@ -1080,11 +1135,20 @@ fn sub_bigint_plus_one<const N: usize>(
 /// Compare two N+1 limb big integers, represented as a tuple of an array of N limbs and a u64 high limb
 #[inline(always)]
 fn compare_bigint_plus_one<const N: usize>(a: ([u64; N], u64), b: ([u64; N], u64)) -> core::cmp::Ordering {
-    if a.1 > b.1 {
+    if a.1 > b.1 { // Compare high limbs (a_hi vs b_hi)
         return core::cmp::Ordering::Greater;
     } else if a.1 < b.1 {
         return core::cmp::Ordering::Less;
-    } else {
-        a.0.cmp(&b.0)
+    } else { // High limbs are equal, compare low N limbs in Big-Endian order
+        for i in (0..N).rev() { // Iterate from N-1 down to 0
+            if a.0[i] > b.0[i] {
+                return core::cmp::Ordering::Greater;
+            } else if a.0[i] < b.0[i] {
+                return core::cmp::Ordering::Less;
+            }
+            // Limbs are equal, continue to the next lower limb
+        }
+        // All limbs are equal
+        return core::cmp::Ordering::Equal;
     }
 }
