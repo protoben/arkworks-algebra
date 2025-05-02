@@ -82,10 +82,8 @@ harness = false
 name = "small_mul"
 path = "benches/small_mul.rs"
 harness = false
-required-features = ["bn254"]
 
 [[bench]]
 name = "bn254"
 path = "benches/bn254.rs"
 harness = false
-required-features = ["bn254"]
