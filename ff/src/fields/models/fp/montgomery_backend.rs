@@ -936,6 +936,34 @@ impl<T: MontConfig<N>, const N: usize> Fp<MontBackend<T, N>, N> {
         }
     }
 
+    /// Multiply by a u128.
+    /// Uses optimized mul_u64 if the input fits within u64,
+    /// otherwise falls back to standard multiplication.
+    #[inline(always)]
+    pub fn mul_u128(self, other: u128) -> Self {
+        if other <= u64::MAX as u128 {
+            self.mul_u64(other as u64)
+        } else {
+            // Fallback: Convert u128 to Fp and multiply.
+            // Assumes From<u128> is implemented for Fp.
+            self * Self::from(other)
+        }
+    }
+
+    /// Multiply by an i128.
+    /// Uses optimized mul_i64 if the input fits within i64,
+    /// otherwise falls back to standard multiplication.
+    #[inline(always)]
+    pub fn mul_i128(self, other: i128) -> Self {
+        if other >= i64::MIN as i128 && other <= i64::MAX as i128 {
+            self.mul_i64(other as i64)
+        } else {
+            // Fallback: Convert i128 to Fp and multiply.
+            // Assumes From<i128> is implemented for Fp.
+            self * Self::from(other)
+        }
+    }
+
     const fn const_is_valid(&self) -> bool {
         crate::const_for!((i in 0..N) {
             if (self.0).0[N - i - 1] < T::MODULUS.0[N - i - 1] {
