@@ -24,6 +24,7 @@ ark-ec = { workspace = true, default-features = false }
 ark-serialize  = { workspace = true, default-features = false }
 ark-algebra-test-templates = { workspace = true, default-features = false }
 ark-algebra-bench-templates = { workspace = true, default-features = false }
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [features]
 default = []
@@ -72,3 +73,9 @@ harness = false
 name = "mnt6_753"
 path = "benches/mnt6_753.rs"
 harness = false
+
+[[bench]]
+name = "field_mul_u64"
+path = "benches/field_mul_u64.rs"
+harness = false
+required-features = ["secp256k1"]
