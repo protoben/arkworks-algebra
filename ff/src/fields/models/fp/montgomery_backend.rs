@@ -133,11 +133,13 @@ pub trait MontConfig<const N: usize>: 'static + Sync + Send + Sized {
     /// = floor( 2^(64 * (N + 1) - num_spare_bits(MODULUS) - 1) / MODULUS )
     #[doc(hidden)]
     const BARRETT_MU: u64 = {
+        // Compute Barrett mu = floor(2^(modulus_bits + 63) / modulus)
         assert!(Self::MODULUS.num_spare_bits() < 64);
         let r_times_r_prime_over_2 =
             crate::const_helpers::RBuffer::<N>([0u64; N],
                 1 << (63 - Self::MODULUS.num_spare_bits()));
-        let result: BigInt<N> = const_modulo!(r_times_r_prime_over_2, &Self::MODULUS);
+        // Use const_quotient! to compute the quotient
+        let result: BigInt<N> = const_quotient!(r_times_r_prime_over_2, &Self::MODULUS);
         // Result should be a u64
         result.0[0]
     };
@@ -896,33 +898,89 @@ impl<T: MontConfig<N>, const N: usize> Fp<MontBackend<T, N>, N> {
         // Compute m * 2p
         let (m2p_lo, m2p_hi, _m2p_carry) =
             bigint_plus_one_mul_by_u64(&T::MODULUS_TIMES_2.0, &T::MODULUS_TIMES_2.1, m);
+        debug_assert!(_m2p_carry == false); // m * 2p < c should fit in (N+1) limbs
 
-        // Should not have a carry out of the high limb
-        debug_assert!(_m2p_carry == false);
-
-        // Compute r = c - m * 2p
-        // Have either r = (c mod 2p) or r = (c mod 2p) + 2p
-        let (mut r_lo, mut r_hi, _r_borrow) =
+        // Compute r = c - m * 2p. Result r satisfies r = (c mod 2p) or r = (c mod 2p) + 2p
+        // Hence, r < 4p.
+        let (r_lo, r_hi, _) =
             sub_bigint_plus_one((c_lo, c_hi), (m2p_lo, m2p_hi));
 
-        // Conditional subtraction: r := r - 2p if r >= 2p
-        let cmp_2p = compare_bigint_plus_one((r_lo, r_hi), T::MODULUS_TIMES_2);
-        if cmp_2p != core::cmp::Ordering::Less { // if r >= 2p
-            (r_lo, r_hi, _) = sub_bigint_plus_one((r_lo, r_hi), T::MODULUS_TIMES_2);
-        }
-        // Now r = (r_lo, r_hi) = c mod 2p
+        // Stage 4: Final conditional subtractions
+        let mut r_n_limbs: BigInt<N>; // Declare here to be available in all branches
 
-        // Compute c' = r - p if r >= p else r_lo
-        let cmp_p = compare_bigint_plus_one((r_lo, r_hi), (T::MODULUS.0, 0));
-        
-        // if r >= p
-        let result_bigint = if cmp_p != core::cmp::Ordering::Less {
-            sub_bigint_plus_one((r_lo, r_hi), (T::MODULUS.0, 0)).0
+        if T::MODULUS_NUM_SPARE_BITS >= 1 {
+            // Case S >= 1: 2P fits in N limbs (T::MODULUS_TIMES_2.1 == 0)
+            let p2_n_limbs = BigInt::<N>(T::MODULUS_TIMES_2.0);
+
+            if T::MODULUS_NUM_SPARE_BITS >= 2 {
+                // Optimization for S >= 2: r = c - m*2p < 4p already fits in N limbs
+                debug_assert!(r_hi == 0, "High limb of r should be 0 for S >= 2 before subtractions");
+                r_n_limbs = BigInt::<N>(r_lo);
+
+                // Conditional subtraction 1 (if r >= 2P) using N limbs
+                if r_n_limbs >= p2_n_limbs {
+                    r_n_limbs.sub_with_borrow(&p2_n_limbs); // Ignore borrow
+                }
+                // Conditional subtraction 2 (if r >= P) using N limbs
+                if r_n_limbs >= T::MODULUS {
+                    r_n_limbs.sub_with_borrow(&T::MODULUS); // Ignore borrow
+                }
+            } else {
+                // Case S == 1: r = c - m*2p might temporarily exceed N limbs
+                // Perform the first conditional subtraction potentially using r_hi
+
+                // Compare r = (r_lo, r_hi) with 2P = (p2_n_limbs.0, 0)
+                let r_geq_2p = compare_bigint_plus_one((r_lo, r_hi), T::MODULUS_TIMES_2) != core::cmp::Ordering::Less;
+                let temp_r_lo: [u64; N];
+                if r_geq_2p {
+                    // Since 2P fits in N limbs, subtracting it from r might require the high limb r_hi
+                    let (sub_res_lo, sub_res_hi, _) = sub_bigint_plus_one((r_lo, r_hi), T::MODULUS_TIMES_2);
+                    // After subtracting 2P, the result MUST fit in N limbs
+                    debug_assert!(sub_res_hi == 0, "High limb must be 0 after 2P subtraction when S=1");
+                    temp_r_lo = sub_res_lo;
+                } else {
+                    // r was already < 2P.
+                    // If r_geq_2p is false, r < 2P. Since 2P fits in N limbs, r must also fit.
+                    debug_assert!(r_hi == 0, "High limb must be 0 if r < 2P and S=1");
+                    temp_r_lo = r_lo;
+                }
+                r_n_limbs = BigInt::<N>(temp_r_lo);
+
+                // Conditional subtraction 2 (if r >= P) using N limbs
+                // At this point, r_n_limbs holds the value r < 2P fitting in N limbs
+                if r_n_limbs >= T::MODULUS {
+                    r_n_limbs.sub_with_borrow(&T::MODULUS); // Ignore borrow
+                }
+            }
         } else {
-            r_lo
-        };
+            // Case S == 0: Use (N+1)-limb helpers throughout
+            let mut current_r = (r_lo, r_hi);
 
-        Self::new_unchecked(BigInt::<N>::new(result_bigint))
+            // Conditional subtraction 1: if r >= 2p
+            let cmp_2p = compare_bigint_plus_one(current_r, T::MODULUS_TIMES_2);
+            if cmp_2p != core::cmp::Ordering::Less {
+                let sub_result = sub_bigint_plus_one(current_r, T::MODULUS_TIMES_2);
+                current_r = (sub_result.0, sub_result.1); // Keep N+1 representation
+            }
+            // Now current_r = c mod 2p, represented as (lo, hi)
+
+            // Conditional subtraction 2: if r >= p
+            let p_nplus1 = (T::MODULUS.0, 0u64); // Modulus represented as N+1 limbs
+            let cmp_p = compare_bigint_plus_one(current_r, p_nplus1);
+            if cmp_p != core::cmp::Ordering::Less { // if r >= p
+                 let sub_result = sub_bigint_plus_one(current_r, p_nplus1);
+                 // Result MUST fit in N limbs now
+                 debug_assert!(sub_result.1 == 0, "High limb must be 0 after P subtraction when S=0");
+                 r_n_limbs = BigInt::<N>(sub_result.0);
+            } else {
+                 // r was already < P
+                 debug_assert!(current_r.1 == 0, "High limb must be 0 if r < P and S=0");
+                 r_n_limbs = BigInt::<N>(current_r.0);
+            }
+        }
+
+        // Use the final r_n_limbs which holds the correct N-limb result
+        Self::new_unchecked(r_n_limbs)
     }
 
     /// Multiply by an i64.
@@ -1002,62 +1060,60 @@ impl<T: MontConfig<N>, const N: usize> Fp<MontBackend<T, N>, N> {
 #[cfg(test)]
 mod test {
     use ark_std::{str::FromStr, vec::*};
-    use ark_test_curves::secp256k1::Fr;
+    use ark_test_curves::bn254::Fr;
     use num_bigint::{BigInt, BigUint, Sign};
 
     #[test]
     fn test_mul_u64() {
-        // Hardcoded test cases
+        // Hardcoded test cases for a and b
         let test_cases = [
             (
-                // Case 1: a, b, c_expected
+                // Case 1: a, b
                 "5643163066332897998285190543902796094438237865213483745295470180324691296548",
                 0x7ca4ebb3cdc4337c,
-                "38327774843006778574282443845423185889821286904593972973342506303495927514099",
             ),
             (
-                // Case 2: a, b, c_expected
+                // Case 2: a, b
                 "9576115280717986323792898695369675311918746597797968631517140097713896617029",
                 0x91c5fef7b07bafea,
-                "96697958646652577219944786365856988981226975082903134420936821151612435151888",
             ),
             (
-                // Case 3: a, b, c_expected
+                // Case 3: a, b
                 "7661634904059247069564870460362673938206761030595567619339001446116489789481",
                 0x25841ec4215642a8,
-                "89293439558430162673677967055881891199082813356531362972449360818369777995721",
             ),
             (
-                // Case 4: a, b, c_expected
+                // Case 4: a, b
                 "10883286947838267661462139025291841296679667038210980569409473787260452219050",
                 0xfb0a2d275f008413,
-                "19656191731886811905926577359236877197726293107264230636252563426234326962042",
             ),
             (
-                // Case 5: a, b, c_expected
+                // Case 5: a, b
                 "2569976750766767168587755422619162294969046017017098753771495041739016061221",
                 0x13338e370795ef21,
-                "45349715065256290359696693915549785722497254782662339497728486466675099346870",
             ),
         ];
 
-        for (i, (a_str, b_val, expected_c_str)) in test_cases.iter().enumerate() {
+        for (i, (a_str, b_val)) in test_cases.iter().enumerate() {
             // Use Fr::from_str which handles standard decimal/hex and converts to Montgomery form
             let a_prime = Fr::from_str(a_str).expect("Failed to parse a string");
-            let expected_c_prime = Fr::from_str(expected_c_str).expect("Failed to parse expected_c string");
+            
+            // Calculate expected result using standard field multiplication
+            let b_prime = Fr::from(*b_val);
+            let expected_c_prime = a_prime * b_prime;
 
+            // Calculate actual result using the function under test
             let result = a_prime.mul_u64(*b_val);
 
             assert_eq!(
-                result, // This is c' = a*b*R mod p
-                expected_c_prime, // This is also c' = a*b*R mod p (calculated from standard c via from_str)
-                "Test case {} failed:\n a(std) = {}\n b = {:#x}\n Expected c(std) = {}\n Got c'(mont) = {}\n Expected c'(mont) = {}",
+                result, 
+                expected_c_prime, 
+                "Test case {} failed:\n a(std) = {}\n b = {:#x}\n Expected c'(mont) = {}\n Got c'(mont) = {}",
                 i + 1,
                 a_str,
                 b_val,
-                expected_c_str,
-                result, // Fr implements Display (converts *out* of Montgomery form to standard decimal)
-                expected_c_prime // Fr implements Display (converts *out* of Montgomery form to standard decimal)
+                expected_c_prime, // Display trait converts out of Montgomery form
+                result // Display trait converts out of Montgomery form
             );
         }
     }

@@ -125,6 +125,36 @@ macro_rules! const_modulo {
     }};
 }
 
+#[doc(hidden)]
+macro_rules! const_quotient {
+    ($a:expr, $divisor:expr) => {{
+        // Binary long division computing the quotient
+        assert!(!$divisor.const_is_zero());
+        let mut remainder = BigInt::<N>::new([0u64; N]);
+        let mut quotient = BigInt::<N>::new([0u64; N]); // Initialize quotient
+        let mut i = ($a.num_bits() - 1) as isize;
+        let mut carry;
+        while i >= 0 {
+            // Left shift remainder by 1
+            (remainder, carry) = remainder.const_mul2_with_carry();
+            // Bring down the next bit from dividend $a$ into remainder LSB
+            remainder.0[0] |= $a.get_bit(i as usize) as u64;
+
+            // If remainder >= divisor
+            if remainder.const_geq($divisor) || carry {
+                // Subtract divisor from remainder
+                let (r, borrow) = remainder.const_sub_with_borrow($divisor);
+                remainder = r;
+                assert!(borrow == carry);
+                // Manually set the i-th bit of the quotient
+                quotient.0[(i as usize) / 64] |= 1u64 << ((i as usize) % 64);
+            }
+            i -= 1;
+        }
+        quotient // Return the quotient
+    }};
+}
+
 impl<const N: usize> BigInt<N> {
     pub const fn new(value: [u64; N]) -> Self {
         Self(value)
