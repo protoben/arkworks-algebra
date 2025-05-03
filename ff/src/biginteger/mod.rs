@@ -678,6 +678,18 @@ impl<const N: usize> AsRef<[u64]> for BigInt<N> {
     }
 }
 
+impl<const N: usize> From<u128> for BigInt<N> {
+    #[inline]
+    fn from(val: u128) -> BigInt<N> {
+        let mut repr = Self::default();
+        repr.0[0] = val as u64;
+        if N > 1 {
+            repr.0[1] = (val >> 64) as u64;
+        }
+        repr
+    }
+}
+
 impl<const N: usize> From<u64> for BigInt<N> {
     #[inline]
     fn from(val: u64) -> BigInt<N> {
@@ -976,6 +988,7 @@ pub trait BigInteger:
     + Zeroize
     + AsMut<[u64]>
     + AsRef<[u64]>
+    + From<u128>
     + From<u64>
     + From<u32>
     + From<u16>
