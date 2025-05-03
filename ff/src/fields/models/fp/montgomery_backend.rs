@@ -977,7 +977,7 @@ impl<T: MontConfig<N>, const N: usize> Fp<MontBackend<T, N>, N> {
     /// Fallback option for mul_u128: if the input does not fit within u64,
     /// we perform a more expensive procedure with 2 rounds of Barrett reduction.
     #[inline(always)]
-    fn mul_u128_aux(self, other: u128) -> Self {
+    pub fn mul_u128_aux(self, other: u128) -> Self {
         // Stage 1: Bignum Multiplication
         // Compute c = self.0 * other. Result c has N+2 limbs: (c_lo: [u64; 2], c_hi: [u64; N])
         let (c_lo, c_hi) = bigint_mul_by_u128(&self.0, other);
@@ -1122,6 +1122,7 @@ fn sub_bigint_plus_one<const N: usize>(
 }
 
 /// Compare two N+1 limb big integers (represented as low u64 and high N limbs).
+#[unroll_for_loops(8)]
 #[inline(always)]
 fn compare_bigint_plus_one<const N: usize>(
     a: (u64, [u64; N]),
@@ -1170,22 +1171,20 @@ fn bigint_mul_by_u128<const N: usize>(val: &BigInt<N>, other: u128) -> ([u64; 2]
 
     // r_lo[0] = p1_lo + 0 + carry (carry is initially 0)
     r_lo[0] = p1_lo;
-    // carry = 0; // Stays 0
+    // carry = 0; // Initial carry is 0
 
-    // Calculate r_lo[1] (limb 1)
-    // sum = p1_hi[0] + p2_lo + carry
-    let sum1_128 = (p1_hi[0] as u128) + (p2_lo as u128) + (carry as u128);
-    r_lo[1] = sum1_128 as u64;
-    carry = (sum1_128 >> 64) as u64;
+    // Calculate r_lo[1] = p1_hi[0] + p2_lo + carry (limb 1)
+    r_lo[1] = p1_hi[0]; // Initialize with p1 limb
+    carry = fa::adc(&mut r_lo[1], p2_lo, carry); // Add p2 limb and carry
 
     // Calculate r_hi[0] to r_hi[N-1] (limbs 2 to N+1)
     for i in 0..N {
-        // sum = p1_hi[i+1 (or 0 if i=N-1)] + p2_hi[i] + carry
-        // Need to handle index carefully for p1_hi
-        let p1_limb = if i + 1 < N { p1_hi[i + 1] } else { 0 }; // Conceptually p1_hi[N] is 0
-        let sum_i_128 = (p1_limb as u128) + (p2_hi[i] as u128) + (carry as u128);
-        r_hi[i] = sum_i_128 as u64;
-        carry = (sum_i_128 >> 64) as u64;
+        let p1_limb = if i + 1 < N { p1_hi[i + 1] } else { 0 }; // Limb p1[i+2]
+        let p2_limb = p2_hi[i]; // Limb p2[i+1]
+
+        // r_hi[i] = p1_limb + p2_limb + carry
+        r_hi[i] = p1_limb; // Initialize with p1 limb
+        carry = fa::adc(&mut r_hi[i], p2_limb, carry); // Add p2 limb and carry
     }
 
     // The final carry MUST be zero for the result to fit in N+2 limbs.
@@ -1197,6 +1196,7 @@ fn bigint_mul_by_u128<const N: usize>(val: &BigInt<N>, other: u128) -> ([u64; 2]
 /// Helper function to perform Barrett reduction from N+1 limbs to N limbs.
 /// Input `c` is represented as `(u64, [u64; N])`.
 /// Output is the N-limb result `[u64; N]`.
+#[unroll_for_loops(4)]
 #[inline(always)]
 fn barrett_reduce_nplus1_to_n<T: MontConfig<N>, const N: usize>(c: (u64, [u64; N])) -> [u64; N] {
     let (c_lo, c_hi) = c; // c_lo is the lowest limb, c_hi holds the top N limbs
