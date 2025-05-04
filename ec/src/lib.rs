@@ -28,7 +28,11 @@ use ark_std::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
     vec::*,
 };
-pub use scalar_mul::{variable_base::VariableBaseMSM, ScalarMul};
+pub use scalar_mul::{
+    fixed_base::FixedBase,
+    variable_base::VariableBaseMSM,
+    ScalarMul,
+};
 use zeroize::Zeroize;
 
 pub use ark_ff::AdditiveGroup;
