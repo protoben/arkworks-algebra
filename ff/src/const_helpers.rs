@@ -277,6 +277,35 @@ impl<const N: usize> R2Buffer<N> {
     }
 }
 
+/// Helper function to add two N+1 limb big integers, with 1 low limb and N high limbs.
+pub(super) const fn add_bigint_plus_one<const N: usize>(
+    a: (u64, [u64; N]),
+    b: (u64, [u64; N]),
+) -> ((u64, [u64; N]), bool) {
+    let (mut a_lo, mut a_hi) = a;
+    let (b_lo, b_hi) = b;
+    let mut carry: u64;
+
+    // Add low u64 limb manually
+    let tmp = (a_lo as u128) + (b_lo as u128);
+    a_lo = tmp as u64;
+    carry = (tmp >> 64) as u64;
+
+    // Add high N limbs manually
+    let mut i = 0;
+    while i < N {
+        let tmp = (a_hi[i] as u128) + (b_hi[i] as u128) + (carry as u128);
+        a_hi[i] = tmp as u64;
+        carry = (tmp >> 64) as u64;
+        i += 1;
+    }
+
+    // Final carry indicates overflow
+    let final_carry_occurred = carry != 0;
+
+    ((a_lo, a_hi), final_carry_occurred)
+}
+
 mod tests {
     #[test]
     fn test_mul_buffer_correctness() {
