@@ -1080,23 +1080,16 @@ fn bigint_mul_by_u64<const N: usize>(val: &[u64; N], other: u64) -> (u64, [u64; 
     let mut carry: u64; // Start with carry = 0
 
     // Calculate the full 128-bit product of the lowest limb
-    let prod128_0: u128 = (val[0] as u128) * (other as u128);
-    let result_lo = prod128_0 as u64; // Lowest limb of the result
-    carry = (prod128_0 >> 64) as u64; // Carry into the high part
+    let prod_lo: u128 = (val[0] as u128) * (other as u128);
+    let result_lo = prod_lo as u64; // Lowest limb of the result
+    carry = (prod_lo >> 64) as u64; // Carry into the high part
 
     // Iterate through the remaining limbs of the input BigInt
     for i in 1..N {
         // Calculate the full 128-bit product of the current limb and the u64 multiplier
-        let prod128: u128 = (val[i] as u128) * (other as u128);
-
-        // Add the carry from the previous limb's computation
-        let sum128: u128 = prod128 + (carry as u128);
-
-        // The lower 64 bits of the sum become the current result limb (in the high part)
-        result_hi[i - 1] = sum128 as u64; // Store in result_hi[0] to result_hi[N-2]
-
-        // The upper 64 bits of the sum become the carry for the next limb
-        carry = (sum128 >> 64) as u64;
+        let prod_hi: u128 = (val[i] as u128) * (other as u128) + (carry as u128);
+        result_hi[i - 1] = prod_hi as u64; // Store in result_hi[0] to result_hi[N-2]
+        carry = (prod_hi >> 64) as u64;
     }
 
     // After the loop, the final carry is the highest limb (N-th limb of the high part)
@@ -1253,7 +1246,7 @@ fn get_n_limbs_from_n_plus_one<const N: usize>(val: (u64, [u64; N])) -> BigInt<N
 /// Performs up to 2 conditional subtractions, instead of 1 in the optimized version.
 /// (though benchmarks show that there is essentially no difference in performance)
 #[inline(always)]
-fn barrett_cond_subtract<T: MontConfig<N>, const N: usize>(r_tmp: (u64, [u64; N])) -> [u64; N] {
+fn _barrett_cond_subtract<T: MontConfig<N>, const N: usize>(r_tmp: (u64, [u64; N])) -> [u64; N] {
      // Final conditional subtractions (optimized based on spare bits)
     let final_limbs: [u64; N];
 
@@ -1331,7 +1324,7 @@ fn barrett_cond_subtract<T: MontConfig<N>, const N: usize>(r_tmp: (u64, [u64; N]
 /// Takes an N+1 limb intermediate result `r_tmp` and returns the N-limb final result.
 #[unroll_for_loops(4)]
 #[inline(always)]
-fn _barrett_cond_subtract_prime<T: MontConfig<N>, const N: usize>(r_tmp: (u64, [u64; N])) -> [u64; N] {
+fn barrett_cond_subtract_prime<T: MontConfig<N>, const N: usize>(r_tmp: (u64, [u64; N])) -> [u64; N] {
     let final_limbs: [u64; N];
     let r_n = get_n_limbs_from_n_plus_one::<N>(r_tmp);
 
@@ -1439,7 +1432,7 @@ fn barrett_reduce_nplus1_to_n<T: MontConfig<N>, const N: usize>(c: (u64, [u64; N
     let (r_tmp, _) = sub_bigint_plus_one(c, m_times_2p); // r_tmp = (r_tmp_lo, r_tmp_hi)
 
     // Use the optimized conditional subtraction
-    barrett_cond_subtract::<T, N>(r_tmp)
+    barrett_cond_subtract_prime::<T, N>(r_tmp)
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use ark_ff::UniformRand;
 use ark_std::rand::{rngs::StdRng, Rng, SeedableRng};
-use ark_test_curves::secp256k1::{Fr, FqConfig, FrConfig};
+use ark_test_curves::secp256k1::{Fr, FrConfig};
 use criterion::{criterion_group, criterion_main, Criterion};
 use ark_ff::BigInteger;
 use ark_ff::BigInt;
