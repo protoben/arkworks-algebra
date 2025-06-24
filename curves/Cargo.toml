@@ -18,6 +18,7 @@ members = [
     "ed_on_bls12_381",
     "ed_on_bls12_381_bandersnatch",
 
+    "bn63",
     "bn254",
     "ed_on_bn254",
     "grumpkin",
@@ -67,6 +68,7 @@ ark-algebra-bench-templates =  { version = "0.5.0", path = "../bench-templates",
 ark-bls12-377 = { version = "0.5.0", path = "./bls12_377", default-features = false }
 ark-bls12-381 = { version = "0.5.0", path = "./bls12_381", default-features = false }
 ark-ed-on-cp6-782 = { version = "0.5.0", path = "./ed_on_cp6_782", default-features = false }
+ark-bn63 = { version = "0.5.0", path = "./bn63", default-features = false }
 ark-bn254 = { version = "0.5.0", path = "./bn254", default-features = false }
 ark-mnt4-298 = { version = "0.5.0", path = "./mnt4_298", default-features = false }
 ark-mnt4-753 = { version = "0.5.0", path = "./mnt4_753", default-features = false }
