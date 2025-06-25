@@ -32,15 +32,15 @@
 //!      Fq2(19485874751759354771024239261021720505790618469301721065564631296452457478373,
 //!      266929791119991161246907387137283842545076965332900288569378510910307636690)
 
-//#[cfg(feature = "curve")]
-//mod curves;
+#[cfg(feature = "curve")]
+mod curves;
 
 mod fields;
 
-//#[cfg(feature = "curve")]
-//pub use curves::*;
+#[cfg(feature = "curve")]
+pub use curves::*;
 
 pub use fields::*;
 
-//#[cfg(feature = "r1cs")]
-//pub mod constraints;
+#[cfg(feature = "r1cs")]
+pub mod constraints;

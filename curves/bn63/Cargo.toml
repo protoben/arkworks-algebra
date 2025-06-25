@@ -2,7 +2,7 @@
 name = "ark-bn63"
 version.workspace = true
 authors.workspace = true
-description = "The BN254 pairing-friendly elliptic curve"
+description = "The BN63 pairing-friendly elliptic curve"
 homepage.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/ark-bn254/"

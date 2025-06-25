@@ -18,10 +18,10 @@ pub mod fq6;
 #[cfg(feature = "curve")]
 pub use self::fq6::*;
 
-//#[cfg(feature = "curve")]
-//pub mod fq12;
-//#[cfg(feature = "curve")]
-//pub use self::fq12::*;
+#[cfg(feature = "curve")]
+pub mod fq12;
+#[cfg(feature = "curve")]
+pub use self::fq12::*;
 
 #[cfg(all(feature = "curve", test))]
 mod tests;
