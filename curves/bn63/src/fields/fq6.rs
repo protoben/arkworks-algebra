@@ -17,30 +17,15 @@ impl Fp6Config for Fq6Config {
         // Fp2::NONRESIDUE^(((q^0) - 1) / 3)
         Fq2::new(Fq::ONE, Fq::ZERO),
         // Fp2::NONRESIDUE^(((q^1) - 1) / 3)
-        Fq2::new(
-            MontFp!("1815976938638438858"),
-            MontFp!("5600861505652491462"),
-        ),
+        Fq2::new(MontFp!("99"), MontFp!("99")),
         // Fp2::NONRESIDUE^(((q^2) - 1) / 3)
-        Fq2::new(
-            MontFp!("150229326907837"),
-            Fq::ZERO,
-        ),
+        Fq2::new(MontFp!("99"), Fq::ZERO),
         // Fp2::NONRESIDUE^(((q^3) - 1) / 3)
-        Fq2::new(
-            MontFp!("2977466623092999127"),
-            MontFp!("2620973195758918058"),
-        ),
+        Fq2::new(MontFp!("99"), MontFp!("99")),
         // Fp2::NONRESIDUE^(((q^4) - 1) / 3)
-        Fq2::new(
-            MontFp!("6094353107138948651"),
-            Fq::ZERO,
-        ),
+        Fq2::new(MontFp!("99"), Fq::ZERO),
         // Fp2::NONRESIDUE^(((q^5) - 1) / 3)
-        Fq2::new(
-            MontFp!("1301059774734418504"),
-            MontFp!("3967171971520303458"),
-        ),
+        Fq2::new(MontFp!("99"), MontFp!("99")),
     ];
 
     const FROBENIUS_COEFF_FP6_C2: &'static [Fq2] = &[
@@ -52,20 +37,14 @@ impl Fp6Config for Fq6Config {
             MontFp!("1568466356636742399"),
         ),
         // Fp2::NONRESIDUE^((2*(q^2) - 2) / 3)
-        Fq2::new(
-            MontFp!("6094353107138948651"),
-            Fq::ZERO,
-        ),
+        Fq2::new(MontFp!("6094353107138948651"), Fq::ZERO),
         // Fp2::NONRESIDUE^((2*(q^3) - 2) / 3)
         Fq2::new(
             MontFp!("3696619507225245745"),
             MontFp!("2639269374417157822"),
         ),
         // Fp2::NONRESIDUE^((2*(q^4) - 2) / 3)
-        Fq2::new(
-            MontFp!("150229326907837"),
-            Fq::ZERO,
-        ),
+        Fq2::new(MontFp!("150229326907837"), Fq::ZERO),
         // Fp2::NONRESIDUE^((2*(q^5) - 2) / 3)
         Fq2::new(
             MontFp!("5322526873970400681"),

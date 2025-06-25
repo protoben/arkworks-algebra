@@ -29,7 +29,7 @@ impl SWCurveConfig for Config {
     const COEFF_A: Fq = Fq::ZERO;
 
     /// COEFF_B = 3
-    const COEFF_B: Fq = MontFp!("3");
+    const COEFF_B: Fq = MontFp!("99");
 
     /// AFFINE_GENERATOR_COEFFS = (G1_GENERATOR_X, G1_GENERATOR_Y)
     const GENERATOR: G1Affine = G1Affine::new_unchecked(G1_GENERATOR_X, G1_GENERATOR_Y);
@@ -56,18 +56,15 @@ impl SWCurveConfig for Config {
 }
 
 impl GLVConfig for Config {
-    const ENDO_COEFFS: &'static [Self::BaseField] = &[MontFp!(
-        "21888242871839275220042445260109153167277707414472061641714758635765020556616"
-    )];
+    const ENDO_COEFFS: &'static [Self::BaseField] = &[MontFp!("99")];
 
-    const LAMBDA: Self::ScalarField =
-        MontFp!("21888242871839275217838484774961031246154997185409878258781734729429964517155");
+    const LAMBDA: Self::ScalarField = MontFp!("99");
 
     const SCALAR_DECOMP_COEFFS: [(bool, <Self::ScalarField as PrimeField>::BigInt); 4] = [
-        (false, BigInt!("147946756881789319000765030803803410728")),
-        (true, BigInt!("9931322734385697763")),
-        (false, BigInt!("9931322734385697763")),
-        (false, BigInt!("147946756881789319010696353538189108491")),
+        (false, BigInt!("99")),
+        (true, BigInt!("99")),
+        (false, BigInt!("99")),
+        (false, BigInt!("99")),
     ];
 
     fn endomorphism(p: &Projective<Self>) -> Projective<Self> {
@@ -86,4 +83,4 @@ impl GLVConfig for Config {
 pub const G1_GENERATOR_X: Fq = Fq::ONE;
 
 /// G1_GENERATOR_Y = 2
-pub const G1_GENERATOR_Y: Fq = MontFp!("2");
+pub const G1_GENERATOR_Y: Fq = MontFp!("99");
