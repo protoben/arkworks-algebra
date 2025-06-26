@@ -56,15 +56,15 @@ impl SWCurveConfig for Config {
 }
 
 impl GLVConfig for Config {
-    const ENDO_COEFFS: &'static [Self::BaseField] = &[MontFp!("99")];
+    const ENDO_COEFFS: &'static [Self::BaseField] = &[MontFp!("9127415502199862703")];
 
-    const LAMBDA: Self::ScalarField = MontFp!("99");
+    const LAMBDA: Self::ScalarField = MontFp!("17814630868601186721");
 
     const SCALAR_DECOMP_COEFFS: [(bool, <Self::ScalarField as PrimeField>::BigInt); 4] = [
-        (false, BigInt!("99")),
-        (true, BigInt!("99")),
-        (false, BigInt!("99")),
-        (false, BigInt!("99")),
+        (false, BigInt!("5492728983602578681")),
+        (true, BigInt!("9462958450756631917")),
+        (false, BigInt!("14664477307836921991")),
+        (false, BigInt!("14862879975544371511")),
     ];
 
     fn endomorphism(p: &Projective<Self>) -> Projective<Self> {
@@ -83,4 +83,4 @@ impl GLVConfig for Config {
 pub const G1_GENERATOR_X: Fq = Fq::ONE;
 
 /// G1_GENERATOR_Y = 2
-pub const G1_GENERATOR_Y: Fq = MontFp!("99");
+pub const G1_GENERATOR_Y: Fq = MontFp!("9176312775253704374");

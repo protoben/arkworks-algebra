@@ -17,15 +17,21 @@ impl Fp6Config for Fq6Config {
         // Fp2::NONRESIDUE^(((q^0) - 1) / 3)
         Fq2::new(Fq::ONE, Fq::ZERO),
         // Fp2::NONRESIDUE^(((q^1) - 1) / 3)
-        Fq2::new(MontFp!("99"), MontFp!("99")),
+        Fq2::new(
+            MontFp!("9447033008302988816"),
+            MontFp!("4993688792287293668"),
+        ),
         // Fp2::NONRESIDUE^(((q^2) - 1) / 3)
-        Fq2::new(MontFp!("99"), Fq::ZERO),
+        Fq2::new(MontFp!("10977246212795789640"), Fq::ZERO),
         // Fp2::NONRESIDUE^(((q^3) - 1) / 3)
-        Fq2::new(MontFp!("99"), MontFp!("99")),
+        Fq2::new(MontFp!("14282140240228910547"), MontFp!("99")),
         // Fp2::NONRESIDUE^(((q^4) - 1) / 3)
-        Fq2::new(MontFp!("99"), Fq::ZERO),
+        Fq2::new(MontFp!("14899400062266438237"), Fq::ZERO),
         // Fp2::NONRESIDUE^(((q^5) - 1) / 3)
-        Fq2::new(MontFp!("99"), MontFp!("99")),
+        Fq2::new(
+            MontFp!("16426983657807468186"),
+            MontFp!("8808657312839593921"),
+        ),
     ];
 
     const FROBENIUS_COEFF_FP6_C2: &'static [Fq2] = &[

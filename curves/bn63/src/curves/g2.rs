@@ -22,7 +22,7 @@ impl CurveConfig for Config {
     const COFACTOR: &'static [u64] = &[0x99, 0x99, 0x99, 0x99];
 
     /// COFACTOR_INV = COFACTOR^{-1} mod r
-    const COFACTOR_INV: Fr = MontFp!("99");
+    const COFACTOR_INV: Fr = MontFp!("5615208686899932507");
 }
 
 impl SWCurveConfig for Config {
@@ -31,7 +31,10 @@ impl SWCurveConfig for Config {
 
     /// COEFF_B = 3/(u+9)
     /// (19485874751759354771024239261021720505790618469301721065564631296452457478373, 266929791119991161246907387137283842545076965332900288569378510910307636690)
-    const COEFF_B: Fq2 = Fq2::new(MontFp!("99"), MontFp!("99"));
+    const COEFF_B: Fq2 = Fq2::new(
+        MontFp!("17066760211692425161"),
+        MontFp!("10568575756029793701"),
+    );
 
     /// AFFINE_GENERATOR_COEFFS = (G2_GENERATOR_X, G2_GENERATOR_Y)
     const GENERATOR: G2Affine = G2Affine::new_unchecked(G2_GENERATOR_X, G2_GENERATOR_Y);
@@ -53,15 +56,16 @@ impl SWCurveConfig for Config {
 }
 
 impl GLVConfig for Config {
-    const ENDO_COEFFS: &'static [Self::BaseField] = &[Fq2::new(MontFp!("99"), Fq::ZERO)];
+    const ENDO_COEFFS: &'static [Self::BaseField] =
+        &[Fq2::new(MontFp!("16009662091807340266"), Fq::ZERO)];
 
-    const LAMBDA: Self::ScalarField = MontFp!("99");
+    const LAMBDA: Self::ScalarField = MontFp!("11043826307533061343");
 
     const SCALAR_DECOMP_COEFFS: [(bool, <Self::ScalarField as PrimeField>::BigInt); 4] = [
-        (false, BigInt!("99")),
-        (false, BigInt!("99")),
-        (true, BigInt!("99")),
-        (false, BigInt!("99")),
+        (false, BigInt!("2869219446101000187")),
+        (false, BigInt!("10450423140025039946")),
+        (true, BigInt!("357013817905378075")),
+        (false, BigInt!("13531258301607562980")),
     ];
 
     fn endomorphism(p: &Projective<Self>) -> Projective<Self> {
@@ -82,25 +86,31 @@ pub const G2_GENERATOR_Y: Fq2 = Fq2::new(G2_GENERATOR_Y_C0, G2_GENERATOR_Y_C1);
 
 /// G2_GENERATOR_X_C0 =
 /// 10857046999023057135944570762232829481370756359578518086990519993285655852781
-pub const G2_GENERATOR_X_C0: Fq = MontFp!("99");
+pub const G2_GENERATOR_X_C0: Fq = MontFp!("3944857347605343603");
 
 /// G2_GENERATOR_X_C1 =
 /// 11559732032986387107991004021392285783925812861821192530917403151452391805634
-pub const G2_GENERATOR_X_C1: Fq = MontFp!("99");
+pub const G2_GENERATOR_X_C1: Fq = MontFp!("9581165819947623316");
 
 /// G2_GENERATOR_Y_C0 =
 /// 8495653923123431417604973247489272438418190587263600148770280649306958101930
-pub const G2_GENERATOR_Y_C0: Fq = MontFp!("99");
+pub const G2_GENERATOR_Y_C0: Fq = MontFp!("852492769061090613");
 
 /// G2_GENERATOR_Y_C1 =
 /// 4082367875863433681332203403145435568316851327593401208105741076214120093531
-pub const G2_GENERATOR_Y_C1: Fq = MontFp!("99");
+pub const G2_GENERATOR_Y_C1: Fq = MontFp!("14652159648447806204");
 
 // PSI_X = (u+9)^((p-1)/3) = TWIST_MUL_BY_Q_X
-const P_POWER_ENDOMORPHISM_COEFF_0: Fq2 = Fq2::new(MontFp!("99"), MontFp!("99"));
+const P_POWER_ENDOMORPHISM_COEFF_0: Fq2 = Fq2::new(
+    MontFp!("1859294710839419595"),
+    MontFp!("9413132207259487413"),
+);
 
 // PSI_Y = (u+9)^((p-1)/2) = TWIST_MUL_BY_Q_Y
-const P_POWER_ENDOMORPHISM_COEFF_1: Fq2 = Fq2::new(MontFp!("99"), MontFp!("99"));
+const P_POWER_ENDOMORPHISM_COEFF_1: Fq2 = Fq2::new(
+    MontFp!("5197069215766714063"),
+    MontFp!("4170058831440411490"),
+);
 
 // Integer representation of 6x^2 = t - 1
 const SIX_X_SQUARED: [u64; 2] = [17887900258952609094, 8020209761171036667];
