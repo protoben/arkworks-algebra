@@ -20,8 +20,8 @@ impl Fp2Config for Fq2Config {
         MontFp!("-1"),
     ];
 
-    //#[inline(always)]
-    //fn mul_fp_by_nonresidue_in_place(fe: &mut Self::Fp) -> &mut Self::Fp {
-    //    fe.neg_in_place()
-    //}
+    #[inline(always)]
+    fn mul_fp_by_nonresidue_in_place(fe: &mut Self::Fp) -> &mut Self::Fp {
+        fe.neg_in_place()
+    }
 }
